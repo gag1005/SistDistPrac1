@@ -1,1 +1,0 @@
-# SistDistPrac1
