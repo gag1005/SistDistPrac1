@@ -54,11 +54,19 @@ public class ChatServerImpl implements ChatServer {
 			System.out.println("Cagaste");
 		}
 		try {
-			while (true) {
-				Socket clientSocket = serverSocket.accept();
+			PrintWriter out = null;
+			BufferedReader in = null;
+			Socket clientSocket;
+			while (alive) {
+				try {
+					clientSocket = serverSocket.accept();					
+				} catch (Exception e) {
+					System.out.println("Se ha cerrado el servidor");
+					return;
+				}
 				System.out.println("Nuevo Cliente: " + clientSocket.getInetAddress() + "/" + clientSocket.getPort());
-				PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-				BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+				out = new PrintWriter(clientSocket.getOutputStream(), true);
+				in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
 				// System.out.println(in.readLine());
 				out.println(String.valueOf(currentId));
@@ -73,7 +81,8 @@ public class ChatServerImpl implements ChatServer {
 				isRunning.put(currentId, Boolean.TRUE);
 				currentId++;
 			}
-
+			in.close();
+			out.close();
 		} catch (IOException e) {
 			System.out.println(
 					"Exception caught when trying to listen on port " + this.port + " or listening for a connection");
@@ -82,28 +91,27 @@ public class ChatServerImpl implements ChatServer {
 	}
 
 	public synchronized void shutdown() {
-		try {
-			for (Integer id : userSockets.keySet()) {
-				userSockets.get(id).close();
-			}
+		alive = false;
+		Object keys[] = userSockets.keySet().toArray();
+		for (Object id : keys) {
+			remove((Integer) id);
+		}
+		try {			
 			serverSocket.close();
-		} catch (IOException e) {
-			System.err.println("Cagaste");
-		} finally {
-			System.exit(0);
+		}catch (IOException e) {
+			System.err.println("Se ha producido un error al cerrar el servidor");
 		}
 	}
 
 	public synchronized void broadcast(ChatMessage message) {
 		for (Integer id : userSockets.keySet()) {
-			if (id != message.getId()) {
+			if (id != message.getId() || message.getId() == 0) {
 				String text = "";
 				// No se pone el nombre en caso de que sea un mensaje del servidor
-				if (message.getId() > 0) {
+				if (message.getId() != 0) {
 					text += "<" + userNames.get(message.getId()) + ">: ";
-					text += message.getMessage();
 				}
-
+				text += message.getMessage();
 				try {
 					PrintWriter out = new PrintWriter(userSockets.get(id).getOutputStream(), true);
 					out.println(text);
@@ -119,6 +127,7 @@ public class ChatServerImpl implements ChatServer {
 		try {
 			isRunning.put(id, Boolean.FALSE);
 			System.out.println("Eliminando a " + id);
+			userThreads.get(id).closeSocket();
 			userThreads.get(id).interrupt();
 			userThreads.remove(id);
 			userSockets.remove(id);
@@ -147,35 +156,29 @@ public class ChatServerImpl implements ChatServer {
 			}
 		}
 
-//		public void close() {
-//			try {
-//				in.skip(in.available());
-//				
-//			} catch (IOException e) {
-//				System.err.println("Cagaste");
-//			}
-//		}
+		public void closeSocket() {
+			try {
+				in.close();
+			} catch (IOException e) {
+				System.err.println("Cagaste");
+			}
+		}
 
 		public void run() {
-            try {
-            	
-	//	         ChatMessage newUserMessage = new ChatMessage(clientId, MessageType.MESSAGE, userNames.get(id) + " se acaba de conectar al chat");
-	//	         broadcast(new	         
+            try {         
+            	 ChatMessage newUserMessage = new ChatMessage(0, MessageType.MESSAGE, userNames.get(id) + " se ha unido al chat.");
+            	 broadcast(newUserMessage);
 		         ChatMessage cm;
-		         while(isRunning.get(id) == Boolean.TRUE)  {
-		        	System.out.println("mensaje recibido de " + id);
-		        	cm = (ChatMessage) in.readObject();
-		        	if (cm == null) {
-		        		break;
+		         while((cm = (ChatMessage) in.readObject()) != null && isRunning.get(id) == Boolean.TRUE)  {
+		        	if (isRunning.get(id) == Boolean.FALSE) {
+		        		clientSocket.close();
+		        		return;
 		        	}
-	                System.out.println(cm.getMessage());
+		        	System.out.println(cm.getMessage());
+		        	System.out.println("Mensaje recibido de " + id + " (" + userNames.get(id) + ") " + cm.getType());
 	                switch (cm.getType()) {
 	                	case LOGOUT:
-	//	              		if(cm.getId()==Integer.parseInt(cm.getMessage())){
-	//	               			alive=false;
-	//	                	}
 	                		remove(Integer.parseInt(cm.getMessage()));
-	                		System.out.println("cosa");
 	                        break;
 	                    case MESSAGE:
 	                        broadcast(cm);
@@ -187,10 +190,8 @@ public class ChatServerImpl implements ChatServer {
 		         }
 		         in.close();
 				 clientSocket.close();
-            } catch (IOException e) {
-                System.out.println("Exception caught on thread");
-                System.err.println(e.getMessage());
-                e.printStackTrace();
+            }catch(IOException e){
+                return;
             }catch(ClassNotFoundException e){
                 System.out.println("Cagaste");
             }

@@ -13,6 +13,7 @@ public class ChatClientImpl implements ChatClient{
     private int port;
     private boolean carryOn = true;
     private int id;
+    private ObjectOutputStream oout;
  
     private Socket socket; 
  
@@ -24,9 +25,7 @@ public class ChatClientImpl implements ChatClient{
     }
  
     public boolean start() {
- 
-        // ChatClientListener ccl = new ChatClientListener();
-    	PrintWriter out;
+     	PrintWriter out;
     	BufferedReader in;
         try{
             socket = new Socket(server, port);
@@ -35,12 +34,10 @@ public class ChatClientImpl implements ChatClient{
             BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
         } catch (UnknownHostException e) {
             System.err.println("Don't know about host " + server);
-            // System.exit(1);
             return false;
         } catch (IOException e) {
             System.err.println("Couldn't get I/O for the connection to " +
                 server);
-            // System.exit(1);
             return false;
         } 
 
@@ -60,24 +57,17 @@ public class ChatClientImpl implements ChatClient{
  
     public void sendMessage(ChatMessage msg) {
         try{
-            //ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            oout.writeUnshared(msg);;
-            
+            oout.writeObject(msg);
         }catch(IOException e){
             System.err.println("No voy a poner cagaste");
         }
     }
  
     public void disconnet() {
-        
-//        try{
-//            socket.close();
-//        }catch(IOException e){
-//            System.err.println("He puesto Cagaste");
-//        }
+    	System.out.println("Te has desconectado");
         carryOn = false;
     }
-    ObjectOutputStream oout;
+    
     private void createMessage(){
         BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
         try{
@@ -91,9 +81,8 @@ public class ChatClientImpl implements ChatClient{
                 ChatMessage cm = null;
                 String type = inputLine.split(" ")[0].toUpperCase();
                 if(type.equals("SHUTDOWN")){
-                    cm = new ChatMessage(id, MessageType.SHUTDOWN, "apagate puto");
+                    cm = new ChatMessage(id, MessageType.SHUTDOWN, "");
                     sendMessage(cm);
-                    disconnet();
                 }else if(type.equals("LOGOUT")){
                 	
                     cm = new ChatMessage(id, MessageType.LOGOUT, Integer.toString(id));
@@ -108,10 +97,10 @@ public class ChatClientImpl implements ChatClient{
                     cm = new ChatMessage(id, MessageType.MESSAGE, inputLine);
                     sendMessage(cm);
                 }
-                //sendMessage(cm);
             }
         }catch(IOException e){
-            System.err.println("Cagaste looool");            
+        	System.out.println("Te han desconectado");
+            System.exit(0);        
         }
     }
  
