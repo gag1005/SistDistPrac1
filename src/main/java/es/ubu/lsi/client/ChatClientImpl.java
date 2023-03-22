@@ -70,11 +70,11 @@ public class ChatClientImpl implements ChatClient{
  
     public void disconnet() {
         
-        try{
-            socket.close();
-        }catch(IOException e){
-            System.err.println("He puesto Cagaste");
-        }
+//        try{
+//            socket.close();
+//        }catch(IOException e){
+//            System.err.println("He puesto Cagaste");
+//        }
         carryOn = false;
     }
     ObjectOutputStream oout;
@@ -83,14 +83,10 @@ public class ChatClientImpl implements ChatClient{
         try{
             String inputLine;
             oout = new ObjectOutputStream(socket.getOutputStream());
-            while (carryOn&&(inputLine = stdIn.readLine()) != null) {
-            	
+            while (carryOn && (inputLine = stdIn.readLine()) != null) {
             	if(oout != null) {	
             		oout.reset();
-            		
-            		
             	}
-            	
             	
                 ChatMessage cm = null;
                 String type = inputLine.split(" ")[0].toUpperCase();
@@ -115,7 +111,7 @@ public class ChatClientImpl implements ChatClient{
                 //sendMessage(cm);
             }
         }catch(IOException e){
-            System.err.println("Cagaste");
+            System.err.println("Cagaste looool");            
         }
     }
  
