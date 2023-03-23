@@ -220,7 +220,8 @@ public class ChatServerImpl implements ChatServer {
 			try {
 				in.close();
 			} catch (IOException e) {
-				System.err.println("Cagaste");
+				System.err.println("Se ha producido un error al cerrar el socket");
+				System.err.println(e.getMessage());
 			}
 		}
 
