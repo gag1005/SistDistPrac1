@@ -31,7 +31,6 @@ public class ChatClientImpl implements ChatClient{
             socket = new Socket(server, port);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
         } catch (UnknownHostException e) {
             System.err.println("Don't know about host " + server);
             return false;

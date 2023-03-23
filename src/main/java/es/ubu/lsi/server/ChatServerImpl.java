@@ -19,10 +19,7 @@ public class ChatServerImpl implements ChatServer {
 	private ServerSocket serverSocket;
 	private int currentId;
 
-	private Map<Integer, String> userNames;
-	private Map<Integer, Socket> userSockets;
 	private Map<Integer, ServerThreadForClient> userThreads;
-	private Map<Integer, Boolean> isRunning;
 
 	public static void main(String[] args) throws IOException {
 		ChatServer chatServer;
@@ -41,10 +38,7 @@ public class ChatServerImpl implements ChatServer {
 		this.clientId = 0;
 		this.sdf = new SimpleDateFormat();
 		this.currentId = 1;
-		this.userNames = new HashMap<Integer, String>();
-		this.userSockets = new HashMap<Integer, Socket>();
 		this.userThreads = new HashMap<Integer, ServerThreadForClient>();
-		this.isRunning = new HashMap<Integer, Boolean>();
 	}
 
 	public void startup() {
@@ -72,13 +66,10 @@ public class ChatServerImpl implements ChatServer {
 				out.println(String.valueOf(currentId));
 				System.out.println("Asignada id: " + currentId);
 				String nombre = in.readLine();
-				userNames.put(currentId, nombre);
-				userSockets.put(currentId, clientSocket);
 
 				ServerThreadForClient hilonuevocliente = new ServerThreadForClient(clientSocket, currentId, nombre);
 				userThreads.put(currentId, hilonuevocliente);
 				hilonuevocliente.start();
-				isRunning.put(currentId, Boolean.TRUE);
 				currentId++;
 			}
 			in.close();
@@ -92,7 +83,7 @@ public class ChatServerImpl implements ChatServer {
 
 	public synchronized void shutdown() {
 		alive = false;
-		Object keys[] = userSockets.keySet().toArray();
+		Object keys[] = userThreads.keySet().toArray(); 
 		for (Object id : keys) {
 			remove((Integer) id);
 		}
@@ -104,16 +95,16 @@ public class ChatServerImpl implements ChatServer {
 	}
 
 	public synchronized void broadcast(ChatMessage message) {
-		for (Integer id : userSockets.keySet()) {
+		for (Integer id : userThreads.keySet()) {
 			if (id != message.getId() || message.getId() == 0) {
 				String text = "";
 				// No se pone el nombre en caso de que sea un mensaje del servidor
 				if (message.getId() != 0) {
-					text += "<" + userNames.get(message.getId()) + ">: ";
+					text += "<" + userThreads.get(message.getId()).getUsername() + ">: ";
 				}
 				text += message.getMessage();
 				try {
-					PrintWriter out = new PrintWriter(userSockets.get(id).getOutputStream(), true);
+					PrintWriter out = new PrintWriter(userThreads.get(id).getClientSocket().getOutputStream(), true);
 					out.println(text);
 
 				} catch (IOException e) {
@@ -125,14 +116,13 @@ public class ChatServerImpl implements ChatServer {
 
 	public synchronized void remove(int id) {
 		try {
-			isRunning.put(id, Boolean.FALSE);
+			ServerThreadForClient userThread = userThreads.get(id);
+			userThread.stopExecution();
+			
 			System.out.println("Eliminando a " + id);
 			userThreads.get(id).closeSocket();
 			userThreads.get(id).interrupt();
 			userThreads.remove(id);
-			userSockets.remove(id);
-			userNames.remove(id);
-			isRunning.remove(id);
 		} catch (Exception e) {
 			System.err.println("No se ha cerrado");
 		}
@@ -144,18 +134,24 @@ public class ChatServerImpl implements ChatServer {
 		private int id;
 		private String username;
 		private ObjectInputStream in;
+		private boolean isRunning;
 
 		private ServerThreadForClient(Socket clientSocket, int id, String username) {
 			this.clientSocket = clientSocket;
 			this.id = id;
 			this.username = username;
+			this.isRunning = true;
 			try {
 				this.in = new ObjectInputStream(clientSocket.getInputStream());
 			} catch (IOException e) {
 				System.err.println("Cagaste");
 			}
 		}
-
+		
+		public void stopExecution() {
+			this.isRunning = false;
+		}
+		
 		public void closeSocket() {
 			try {
 				in.close();
@@ -164,18 +160,30 @@ public class ChatServerImpl implements ChatServer {
 			}
 		}
 
+		public Socket getClientSocket(){
+			return clientSocket;
+		}
+		
+		public void setUserame(String name) {
+			this.username = name;
+		}
+		
+		public String getUsername() {
+			return username;
+		}
+		
 		public void run() {
             try {         
-            	 ChatMessage newUserMessage = new ChatMessage(0, MessageType.MESSAGE, userNames.get(id) + " se ha unido al chat.");
+            	 ChatMessage newUserMessage = new ChatMessage(0, MessageType.MESSAGE, username + " se ha unido al chat.");
             	 broadcast(newUserMessage);
 		         ChatMessage cm;
-		         while((cm = (ChatMessage) in.readObject()) != null && isRunning.get(id) == Boolean.TRUE)  {
-		        	if (isRunning.get(id) == Boolean.FALSE) {
+		         while((cm = (ChatMessage) in.readObject()) != null && isRunning)  {
+		        	if (!isRunning) {
 		        		clientSocket.close();
 		        		return;
 		        	}
 		        	System.out.println(cm.getMessage());
-		        	System.out.println("Mensaje recibido de " + id + " (" + userNames.get(id) + ") " + cm.getType());
+		        	System.out.println("Mensaje recibido de " + id + " (" + username + ") " + cm.getType());
 	                switch (cm.getType()) {
 	                	case LOGOUT:
 	                		remove(Integer.parseInt(cm.getMessage()));
