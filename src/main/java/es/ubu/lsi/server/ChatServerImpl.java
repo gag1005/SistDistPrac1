@@ -45,7 +45,8 @@ public class ChatServerImpl implements ChatServer {
 		try {
 			serverSocket = new ServerSocket(this.port);
 		} catch (IOException e) {
-			System.out.println("Cagaste");
+			System.err.println("Ha ocurrido un error al crear el socket del servidor");
+			System.err.println(e.getMessage());
 		}
 		try {
 			PrintWriter out = null;
@@ -75,9 +76,9 @@ public class ChatServerImpl implements ChatServer {
 			in.close();
 			out.close();
 		} catch (IOException e) {
-			System.out.println(
+			System.err.println(
 					"Exception caught when trying to listen on port " + this.port + " or listening for a connection");
-			System.out.println(e.getMessage());
+			System.err.println(e.getMessage());
 		}
 	}
 
@@ -108,24 +109,20 @@ public class ChatServerImpl implements ChatServer {
 					out.println(text);
 
 				} catch (IOException e) {
-					System.err.println("Cagaste");
+					System.err.println("Ha habido un error al retransmitir el mensaje");
+					System.err.println(e.getMessage());
 				}
 			}
 		}
 	}
 
 	public synchronized void remove(int id) {
-		try {
-			ServerThreadForClient userThread = userThreads.get(id);
-			userThread.stopExecution();
-			
-			System.out.println("Eliminando a " + id);
-			userThreads.get(id).closeSocket();
-			userThreads.get(id).interrupt();
-			userThreads.remove(id);
-		} catch (Exception e) {
-			System.err.println("No se ha cerrado");
-		}
+		ServerThreadForClient userThread = userThreads.get(id);
+		userThread.stopExecution();			
+		userThread.closeSocket();
+		userThread.interrupt();
+		userThreads.remove(id);
+		System.out.println("Eliminando a " + id);
 	}
 
 	class ServerThreadForClient extends Thread {
@@ -144,7 +141,8 @@ public class ChatServerImpl implements ChatServer {
 			try {
 				this.in = new ObjectInputStream(clientSocket.getInputStream());
 			} catch (IOException e) {
-				System.err.println("Cagaste");
+				System.err.println("Ha ocurido un eror durante la creación del ObjectInputStream");
+				System.err.println(e.getMessage());
 			}
 		}
 		
@@ -201,7 +199,8 @@ public class ChatServerImpl implements ChatServer {
             }catch(IOException e){
                 return;
             }catch(ClassNotFoundException e){
-                System.out.println("Cagaste");
+                System.err.println("Ha ocurrido un error durante la ejecución del hilo del cliente");
+                System.err.println(e.getMessage());
             }
         }
 	}

@@ -42,12 +42,13 @@ public class ChatClientImpl implements ChatClient{
 
         try{
         	id = Integer.parseInt(in.readLine());
-    		out.println(username); 
-            System.out.println("Conectado a " + server + " con id: " + id);
-            ChatClientListener ccl = new ChatClientListener();
-            ccl.start();
-        }catch(Exception e){
-            System.err.println("Ehehehe");
+        	out.println(username); 
+        	System.out.println("Conectado a " + server + " con id: " + id);
+        	ChatClientListener ccl = new ChatClientListener();
+        	ccl.start();
+        }catch(IOException e){
+            System.err.println("Ha ocurrido un error al leer el ID dado por el servidor");
+            System.err.println(e.getMessage());
         }
         createMessage();
 
@@ -58,7 +59,8 @@ public class ChatClientImpl implements ChatClient{
         try{
             oout.writeObject(msg);
         }catch(IOException e){
-            System.err.println("No voy a poner cagaste");
+            System.err.println("Ha ocurrido un error al mandar el mensaje");
+            System.err.println(e.getMessage());
         }
     }
  
@@ -83,7 +85,6 @@ public class ChatClientImpl implements ChatClient{
                     cm = new ChatMessage(id, MessageType.SHUTDOWN, "");
                     sendMessage(cm);
                 }else if(type.equals("LOGOUT")){
-                	
                     cm = new ChatMessage(id, MessageType.LOGOUT, Integer.toString(id));
                     sendMessage(cm);
                     disconnet();
@@ -126,7 +127,8 @@ public class ChatClientImpl implements ChatClient{
                 }
                 in.close();
             }catch(IOException e){
-                System.err.println("ODIO LOS TRY CATCH");
+                System.err.println("Ha ocurrido un error el thread del cliente");
+                System.err.println(e.getMessage());
             }
         }
     }
