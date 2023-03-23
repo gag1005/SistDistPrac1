@@ -28,6 +28,9 @@ public class ChatServerImpl implements ChatServer {
 
 	/** Un mapa que contiene los hilos de los clientes, usa las IDs como clave. */
 	private Map<Integer, ServerThreadForClient> userThreads;
+	private Map<String, Integer> nameId;
+	
+	
 	
 	/**
 	 * Clase principal del servidor, instancia un ChatServer
@@ -61,6 +64,7 @@ public class ChatServerImpl implements ChatServer {
 		this.sdf = new SimpleDateFormat();
 		this.currentId = 1;
 		this.userThreads = new HashMap<Integer, ServerThreadForClient>();
+		this.nameId = new HashMap<String, Integer>();
 	}
 
 	/**
@@ -77,8 +81,8 @@ public class ChatServerImpl implements ChatServer {
 			System.err.println(e.getMessage());
 		}
 		try {
-			PrintWriter out = null;
-			BufferedReader in = null;
+			ObjectOutputStream out = null;
+			ObjectInputStream in = null;
 			Socket clientSocket;
 			while (alive) {
 				try {
@@ -88,22 +92,31 @@ public class ChatServerImpl implements ChatServer {
 					return;
 				}
 				System.out.println("Nuevo Cliente: " + clientSocket.getInetAddress() + "/" + clientSocket.getPort());
-				out = new PrintWriter(clientSocket.getOutputStream(), true);
-				in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-
-				// System.out.println(in.readLine());
-				out.println(String.valueOf(currentId));
-				System.out.println("Asignada id: " + currentId);
-				String nombre = in.readLine();
-
-				ServerThreadForClient hilonuevocliente = new ServerThreadForClient(clientSocket, currentId, nombre);
-				userThreads.put(currentId, hilonuevocliente);
-				hilonuevocliente.start();
-				currentId++;
+				out = new ObjectOutputStream(clientSocket.getOutputStream());
+				in = new ObjectInputStream(clientSocket.getInputStream());
+				
+		   	 	ChatMessage id = new ChatMessage(0, MessageType.MESSAGE, String.valueOf(currentId));
+				out.writeObject(id);
+				ChatMessage nombreMessage = (ChatMessage) in.readObject();
+				String nombre = nombreMessage.getMessage();
+				
+				if(!nameId.containsKey(nombre)) {
+					nameId.put(nombre, currentId);
+					System.out.println("Asignada id: " + currentId + " al usuario: " + nombre);
+					in.close();
+					ServerThreadForClient hilonuevocliente = new ServerThreadForClient(clientSocket, currentId, nombre);
+					userThreads.put(currentId, hilonuevocliente);
+					hilonuevocliente.start();
+					currentId++;
+				}				
 			}
-			in.close();
 			out.close();
+			
 		} catch (IOException e) {
+			System.err.println(
+					"Exception caught when trying to listen on port " + this.port + " or listening for a connection");
+			System.err.println(e.getMessage());
+		}catch (ClassNotFoundException e) {
 			System.err.println(
 					"Exception caught when trying to listen on port " + this.port + " or listening for a connection");
 			System.err.println(e.getMessage());
@@ -147,8 +160,9 @@ public class ChatServerImpl implements ChatServer {
 				}
 				text += message.getMessage();
 				try {
-					PrintWriter out = new PrintWriter(userThreads.get(id).getClientSocket().getOutputStream(), true);
-					out.println(text);
+					ObjectOutputStream out = new ObjectOutputStream(userThreads.get(id).getClientSocket().getOutputStream());
+					ChatMessage messageObject = new ChatMessage(0, MessageType.MESSAGE, text);
+					out.writeObject(messageObject);
 
 				} catch (IOException e) {
 					System.err.println("Ha habido un error al retransmitir el mensaje");
@@ -165,6 +179,8 @@ public class ChatServerImpl implements ChatServer {
 	 * @param id El id del usuario que se quiere eliminar
 	 */
 	public synchronized void remove(int id) {
+   	 	ChatMessage disconnet = new ChatMessage(0, MessageType.LOGOUT, "LOGOUT");
+   	 	sendMessage(disconnet, id);		
 		ServerThreadForClient userThread = userThreads.get(id);
 		userThread.stopExecution();			
 		userThread.closeSocket();
@@ -173,6 +189,17 @@ public class ChatServerImpl implements ChatServer {
 		System.out.println("Eliminando a " + id);
 	}
 
+	public void sendMessage(ChatMessage cm, int id) {
+		try {
+			PrintWriter out = new PrintWriter(userThreads.get(id).getClientSocket().getOutputStream(), true);
+			out.println(cm);
+
+		} catch (IOException e) {
+			System.err.println("Ha habido un error al retransmitir el mensaje");
+			System.err.println(e.getMessage());
+		}
+	}
+	
 	class ServerThreadForClient extends Thread {
 
 		//** El socket del cliente. */
@@ -194,14 +221,16 @@ public class ChatServerImpl implements ChatServer {
 		 * @param username El nombre del usuario.
 		 */
 		private ServerThreadForClient(Socket clientSocket, int id, String username) {
-			this.clientSocket = clientSocket;
 			this.id = id;
 			this.username = username;
 			this.isRunning = true;
 			try {
-				this.in = new ObjectInputStream(clientSocket.getInputStream());
+				this.clientSocket = clientSocket;
+				System.out.println("loquesea");
+				in = new ObjectInputStream(clientSocket.getInputStream());
+				System.out.println("Debug");
 			} catch (IOException e) {
-				System.err.println("Ha ocurido un eror durante la creación del ObjectInputStream");
+				System.err.println("Ha ocurrido un error durante la creación del ObjectInputStream");
 				System.err.println(e.getMessage());
 			}
 		}
@@ -261,11 +290,20 @@ public class ChatServerImpl implements ChatServer {
 		        		clientSocket.close();
 		        		return;
 		        	}
-		        	System.out.println(cm.getMessage());
 		        	System.out.println("Mensaje recibido de " + id + " (" + username + ") " + cm.getType());
+		        	System.out.println(cm.getMessage());
 	                switch (cm.getType()) {
 	                	case LOGOUT:
-	                		remove(Integer.parseInt(cm.getMessage()));
+	                		ChatMessage eliminarMessage;
+	                		if (nameId.containsKey(cm.getMessage())) {
+	                			eliminarMessage = new ChatMessage(0, MessageType.MESSAGE, "El usuario " + cm.getMessage() + " ha sido desconectado");
+	                			System.out.println(nameId.get(cm.getMessage()));
+	                			remove(nameId.get(cm.getMessage()));
+	                			nameId.remove(cm.getMessage());
+	                		}else {	                			
+	                			eliminarMessage = new ChatMessage(0, MessageType.MESSAGE, "El usuario " + cm.getMessage() + " no existe");
+	                		}
+	                		sendMessage(eliminarMessage, cm.getId());
 	                        break;
 	                    case MESSAGE:
 	                        broadcast(cm);
