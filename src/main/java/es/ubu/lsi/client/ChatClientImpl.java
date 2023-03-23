@@ -99,7 +99,7 @@ public class ChatClientImpl implements ChatClient{
                 }
             }
         }catch(IOException e){
-        	System.out.println("Te han desconectado");
+        	System.err.println("Te han desconectado");
             System.exit(0);        
         }
     }

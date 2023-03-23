@@ -11,16 +11,33 @@ import es.ubu.lsi.common.ChatMessage.MessageType;
 
 public class ChatServerImpl implements ChatServer {
 
+	/** El puerto pr defecto que usará el servidor. */
 	private static final int DEFAULT_PORT = 1500;
+	/**  */
 	private final int clientId;
+	/**  */
 	private final SimpleDateFormat sdf;
+	/** El puerto que usará el servidor. */
 	private int port;
+	/** Indica si el servidor sigue aceptando clientes. */
 	private boolean alive;
+	/** EL socket del servidor .*/
 	private ServerSocket serverSocket;
+	/** El id que tendrá el proximo cliente, se incrementa clada vez que se conecta un usuario. */
 	private int currentId;
 
+	/** Un mapa que contiene los hilos de los clientes, usa las IDs como clave. */
 	private Map<Integer, ServerThreadForClient> userThreads;
-
+	
+	/**
+	 * Clase principal del servidor, instancia un ChatServer
+	 * usando el puerto que se le de por parámetro o el
+	 * puerto por defecto en caso de que no se especifique
+	 * uno.
+	 * 
+	 * @param args Los argumentos del programa
+	 * @throws IOException
+	 */
 	public static void main(String[] args) throws IOException {
 		ChatServer chatServer;
 		if (args.length >= 1) {
@@ -32,6 +49,11 @@ public class ChatServerImpl implements ChatServer {
 		chatServer.startup();
 	}
 
+	/**
+	 * Constructor de la clase ChatServerImpl.
+	 * 
+	 * @param port El puerto que se quiere use el servidor.
+	 */
 	public ChatServerImpl(int port) {
 		this.alive = true;
 		this.port = port;
@@ -41,6 +63,12 @@ public class ChatServerImpl implements ChatServer {
 		this.userThreads = new HashMap<Integer, ServerThreadForClient>();
 	}
 
+	/**
+	 * Este método contiene el bucle que acepta los clientes
+	 * les asigna un ID, recibe el nombre del cliente y
+	 * finalmente crea un hilo para ese cliente y lo registra
+	 * en el mapa con su id.
+	 */
 	public void startup() {
 		try {
 			serverSocket = new ServerSocket(this.port);
@@ -81,7 +109,12 @@ public class ChatServerImpl implements ChatServer {
 			System.err.println(e.getMessage());
 		}
 	}
-
+	
+	/**
+	 * Se para el bucle que acepta clientes, se desconectan
+	 * todos los clientes, se borran sus hilos y finalmente
+	 * se cierra el socket del servidor.
+	 */
 	public synchronized void shutdown() {
 		alive = false;
 		Object keys[] = userThreads.keySet().toArray(); 
@@ -95,6 +128,15 @@ public class ChatServerImpl implements ChatServer {
 		}
 	}
 
+	/**
+	 * Recibe un mensage y se o manda a todos los clientes
+	 * Incluye el nombre del usuario que madó el mensaje
+	 * ecxcepto cuando se une un nuevo usuario al chat que
+	 * al ser el servidor el que manda el mensaje no se
+	 * muestra el nombre.
+	 * 
+	 * @param message El mensaje a enviar a todos los usuarios del chat.
+	 */
 	public synchronized void broadcast(ChatMessage message) {
 		for (Integer id : userThreads.keySet()) {
 			if (id != message.getId() || message.getId() == 0) {
@@ -116,6 +158,12 @@ public class ChatServerImpl implements ChatServer {
 		}
 	}
 
+	/**
+	 * Elimina a un usuario del chat dado su ID,
+	 * para su hilo y lo borra.
+	 * 
+	 * @param id El id del usuario que se quiere eliminar
+	 */
 	public synchronized void remove(int id) {
 		ServerThreadForClient userThread = userThreads.get(id);
 		userThread.stopExecution();			
@@ -127,12 +175,24 @@ public class ChatServerImpl implements ChatServer {
 
 	class ServerThreadForClient extends Thread {
 
+		//** El socket del cliente. */
 		private Socket clientSocket;
+		/** El id del cliente. */
 		private int id;
+		/** El nombre del usuario. */
 		private String username;
+		/** El input de mensajes. */
 		private ObjectInputStream in;
+		/** Indica que si el hilo está recibiendo los mensajes del cliente. */
 		private boolean isRunning;
 
+		/**
+		 * Constructor de la clase ServerThreadForClient.
+		 * 
+		 * @param clientSocket El socket del cliente asociado a este hilo.
+		 * @param id El id del cliente.
+		 * @param username El nombre del usuario.
+		 */
 		private ServerThreadForClient(Socket clientSocket, int id, String username) {
 			this.clientSocket = clientSocket;
 			this.id = id;
@@ -146,10 +206,16 @@ public class ChatServerImpl implements ChatServer {
 			}
 		}
 		
+		/**
+		 * Para la ejecución del bucle principal del hilo.
+		 */
 		public void stopExecution() {
 			this.isRunning = false;
 		}
 		
+		/**
+		 * Cierra el socket del cliente.
+		 */
 		public void closeSocket() {
 			try {
 				in.close();
@@ -158,18 +224,32 @@ public class ChatServerImpl implements ChatServer {
 			}
 		}
 
+		/**
+		 * Devuelve el socket del cliente asociado
+		 * a este hilo.
+		 * 
+		 * @return El socket del cliente asociado a este hilo.
+		 */
 		public Socket getClientSocket(){
 			return clientSocket;
 		}
 		
-		public void setUserame(String name) {
-			this.username = name;
-		}
-		
+		/**
+		 * Devuelve el nombre del usuario asociado
+		 * a este hilo.
+		 * 
+		 * @return EL nombre del usuario asociado a este hilo.
+		 */
 		public String getUsername() {
 			return username;
 		}
 		
+		/**
+		 * Contiene el bucle principal del hilo,
+		 * escucha los mensajes que envia el
+		 * cliente y hace la acción adecuada
+		 * según el tipo de mensaje que sea.
+		 */
 		public void run() {
             try {         
             	 ChatMessage newUserMessage = new ChatMessage(0, MessageType.MESSAGE, username + " se ha unido al chat.");
