@@ -3,7 +3,8 @@ package es.ubu.lsi.client;
  
 import java.io.*;
 import java.net.*;
- 
+import java.nio.CharBuffer;
+
 import es.ubu.lsi.common.ChatMessage;
 import es.ubu.lsi.common.ChatMessage.MessageType;
  
@@ -18,6 +19,9 @@ public class ChatClientImpl implements ChatClient{
     
     private ObjectOutputStream outo;
  	private ObjectInputStream ino;
+
+    private BufferedReader stdIn;
+
  
     public ChatClientImpl(String server, int port, String username){
         this.server = server;
@@ -25,12 +29,12 @@ public class ChatClientImpl implements ChatClient{
         this.username = username;
         this.id = -1;
     }
- 
+    
     public boolean start() {
         try{
+            stdIn = new BufferedReader(new InputStreamReader(System.in));
             socket = new Socket(server, port);
             outo = new ObjectOutputStream(socket.getOutputStream());
-            ino = new ObjectInputStream(socket.getInputStream());
         } catch (UnknownHostException e) {
             System.err.println("Don't know about host " + server);
             return false;
@@ -40,27 +44,14 @@ public class ChatClientImpl implements ChatClient{
             return false;
         } 
 
-        try{
-        	ChatMessage message = (ChatMessage) ino.readObject();
-        	id = Integer.parseInt(message.getMessage());
-        	ChatMessage nameMessage = new ChatMessage(id, MessageType.MESSAGE, username);
-        	outo.writeObject(nameMessage); 
-        	System.out.println("Conectado a " + server + " con id: " + id);
-        	ChatClientListener ccl = new ChatClientListener();
-        	ccl.start();
-        }catch(IOException e){
-            System.err.println("Ha ocurrido un error al leer el ID dado por el servidor");
-            System.err.println(e.getMessage());
-        }catch (ClassNotFoundException e) {
-        	System.err.println("Ha ocurrido un error al leer el ID dado por el servidor");
-            System.err.println(e.getMessage());
-		}
+        ChatClientListener ccl = new ChatClientListener();
+        ccl.start();
         createMessage();
 
         return true;
     }
  
-    public void sendMessage(ChatMessage msg) {
+    public synchronized void sendMessage(ChatMessage msg) {
         try{
             outo.writeObject(msg);
         }catch(IOException e){
@@ -70,23 +61,26 @@ public class ChatClientImpl implements ChatClient{
     }
  
     public void disconnet() {
+        carryOn = false;
     	try {
+            System.in.close();
+            stdIn.close();
     		ino.close();
     		outo.close();
     		socket.close();			
 		} catch (Exception e) {
-			// TODO: handle exception
+            System.err.println("Ha ocurrido un error al desconectarse");
+            System.err.println(e.getMessage());
 		}
-    	System.out.println("Te has desconectado");
-        carryOn = false;
     }
     
     private void createMessage(){
-        BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
+        // BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
         try{
             String inputLine;
             System.out.print("> ");
             while (carryOn && (inputLine = stdIn.readLine()) != null) {
+                
             	if(outo != null) {	
             		outo.reset();
             	}
@@ -97,11 +91,8 @@ public class ChatClientImpl implements ChatClient{
                     cm = new ChatMessage(id, MessageType.SHUTDOWN, "");
                     sendMessage(cm);
                 }else if(type.equals("LOGOUT")){
-                    cm = new ChatMessage(id, MessageType.LOGOUT, Integer.toString(id));
+                    cm = new ChatMessage(id, MessageType.LOGOUT, username);
                     sendMessage(cm);
-                    disconnet();
-                    
-                    //System.out.println(Integer.toString(id));
                 }else if(type.equals("DROP")){
                     cm = new ChatMessage(id, MessageType.LOGOUT, inputLine.split(" ")[1]);
                     sendMessage(cm);
@@ -112,8 +103,8 @@ public class ChatClientImpl implements ChatClient{
                 System.out.print("> ");
             }
         }catch(IOException e){
-        	System.err.println("Te han desconectado");
-            System.exit(0);        
+        	System.err.println("Ha ocurrido un error en la creación del mensaje");
+            System.err.println(e.getMessage());
         }
     }
  
@@ -135,6 +126,14 @@ public class ChatClientImpl implements ChatClient{
             ChatMessage mensaje;
             try{
                 ino = new ObjectInputStream(socket.getInputStream());
+
+                ChatMessage message = (ChatMessage) ino.readObject();
+                id = Integer.parseInt(message.getMessage());
+                ChatMessage nameMessage = new ChatMessage(id, MessageType.MESSAGE, username);
+                // outo.writeObject(nameMessage); 
+                sendMessage(nameMessage);
+                System.out.println("Conectado a " + server + " con id: " + id);
+
                 while (carryOn && (mensaje = (ChatMessage) ino.readObject()) != null){
                 	if (mensaje.getType() == MessageType.LOGOUT) {
                 		disconnet();

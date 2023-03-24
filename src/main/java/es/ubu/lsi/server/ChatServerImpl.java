@@ -6,6 +6,7 @@ import java.text.*;
 import java.util.HashMap;
 import java.util.Map;
 
+
 import es.ubu.lsi.common.ChatMessage;
 import es.ubu.lsi.common.ChatMessage.MessageType;
 
@@ -80,46 +81,25 @@ public class ChatServerImpl implements ChatServer {
 			System.err.println("Ha ocurrido un error al crear el socket del servidor");
 			System.err.println(e.getMessage());
 		}
-		try {
-			ObjectOutputStream out = null;
-			ObjectInputStream in = null;
-			Socket clientSocket;
-			while (alive) {
-				try {
-					clientSocket = serverSocket.accept();					
-				} catch (Exception e) {
-					System.out.println("Se ha cerrado el servidor");
-					return;
-				}
-				System.out.println("Nuevo Cliente: " + clientSocket.getInetAddress() + "/" + clientSocket.getPort());
-				out = new ObjectOutputStream(clientSocket.getOutputStream());
-				in = new ObjectInputStream(clientSocket.getInputStream());
-				
-		   	 	ChatMessage id = new ChatMessage(0, MessageType.MESSAGE, String.valueOf(currentId));
-				out.writeObject(id);
-				ChatMessage nombreMessage = (ChatMessage) in.readObject();
-				String nombre = nombreMessage.getMessage();
-				
-				if(!nameId.containsKey(nombre)) {
-					nameId.put(nombre, currentId);
-					System.out.println("Asignada id: " + currentId + " al usuario: " + nombre);
-					in.close();
-					ServerThreadForClient hilonuevocliente = new ServerThreadForClient(clientSocket, currentId, nombre);
-					userThreads.put(currentId, hilonuevocliente);
-					hilonuevocliente.start();
-					currentId++;
-				}				
+		// ObjectOutputStream out = null;
+		// ObjectInputStream in = null;
+		Socket clientSocket;
+		while (alive) {
+			try {
+				clientSocket = serverSocket.accept();					
+			} catch (Exception e) {
+				System.out.println("Se ha cerrado el servidor");
+				return;
 			}
-			out.close();
-			
-		} catch (IOException e) {
-			System.err.println(
-					"Exception caught when trying to listen on port " + this.port + " or listening for a connection");
-			System.err.println(e.getMessage());
-		}catch (ClassNotFoundException e) {
-			System.err.println(
-					"Exception caught when trying to listen on port " + this.port + " or listening for a connection");
-			System.err.println(e.getMessage());
+			System.out.println("Nuevo Cliente: " + clientSocket.getInetAddress() + "/" + clientSocket.getPort());
+			ServerThreadForClient hilonuevocliente = new ServerThreadForClient(clientSocket, currentId);
+			userThreads.put(currentId, hilonuevocliente);
+			if (hilonuevocliente.requestName()){
+				hilonuevocliente.start();
+				currentId++;
+			}else{
+				userThreads.remove(currentId);
+			}
 		}
 	}
 	
@@ -159,15 +139,8 @@ public class ChatServerImpl implements ChatServer {
 					text += "<" + userThreads.get(message.getId()).getUsername() + ">: ";
 				}
 				text += message.getMessage();
-				try {
-					ObjectOutputStream out = new ObjectOutputStream(userThreads.get(id).getClientSocket().getOutputStream());
-					ChatMessage messageObject = new ChatMessage(0, MessageType.MESSAGE, text);
-					out.writeObject(messageObject);
-
-				} catch (IOException e) {
-					System.err.println("Ha habido un error al retransmitir el mensaje");
-					System.err.println(e.getMessage());
-				}
+				ChatMessage messageObject = new ChatMessage(0, MessageType.MESSAGE, text);
+				sendMessage(messageObject, id);
 			}
 		}
 	}
@@ -191,9 +164,7 @@ public class ChatServerImpl implements ChatServer {
 
 	public void sendMessage(ChatMessage cm, int id) {
 		try {
-			PrintWriter out = new PrintWriter(userThreads.get(id).getClientSocket().getOutputStream(), true);
-			out.println(cm);
-
+			userThreads.get(id).getOut().writeObject(cm);
 		} catch (IOException e) {
 			System.err.println("Ha habido un error al retransmitir el mensaje");
 			System.err.println(e.getMessage());
@@ -210,6 +181,9 @@ public class ChatServerImpl implements ChatServer {
 		private String username;
 		/** El input de mensajes. */
 		private ObjectInputStream in;
+
+		private ObjectOutputStream out;
+
 		/** Indica que si el hilo está recibiendo los mensajes del cliente. */
 		private boolean isRunning;
 
@@ -218,21 +192,45 @@ public class ChatServerImpl implements ChatServer {
 		 * 
 		 * @param clientSocket El socket del cliente asociado a este hilo.
 		 * @param id El id del cliente.
-		 * @param username El nombre del usuario.
 		 */
-		private ServerThreadForClient(Socket clientSocket, int id, String username) {
+		private ServerThreadForClient(Socket clientSocket, int id) {
+			this.clientSocket = clientSocket;
 			this.id = id;
-			this.username = username;
 			this.isRunning = true;
 			try {
-				this.clientSocket = clientSocket;
-				System.out.println("loquesea");
-				in = new ObjectInputStream(clientSocket.getInputStream());
-				System.out.println("Debug");
+				this.out = new ObjectOutputStream(clientSocket.getOutputStream());
+				this.in = new ObjectInputStream(clientSocket.getInputStream());
 			} catch (IOException e) {
 				System.err.println("Ha ocurrido un error durante la creación del ObjectInputStream");
 				System.err.println(e.getMessage());
 			}
+		}
+
+		public boolean requestName(){
+			ChatMessage idMsg = new ChatMessage(0, MessageType.MESSAGE, String.valueOf(currentId));
+			sendMessage(idMsg, id);
+			try{
+				ChatMessage nombreMessage = (ChatMessage) in.readObject();
+				username = nombreMessage.getMessage();
+				if(!nameId.containsKey(username)) {
+					nameId.put(username, currentId);
+					System.out.println("Asignada id: " + currentId + " al usuario: " + username);
+					return true;
+				}
+			}catch(IOException e){
+				System.err.println("Ha ocurrido un error durante la creación del ObjectInputStream");
+				System.err.println(e.getMessage());
+			}catch(ClassNotFoundException e){
+				System.err.println("Ha ocurrido un error durante la creación del ObjectInputStream");
+				System.err.println(e.getMessage());
+			}
+			
+			
+			return false;
+		}
+		
+		public void setIn(ObjectInputStream in){
+			this.in = in;
 		}
 		
 		/**
@@ -273,6 +271,10 @@ public class ChatServerImpl implements ChatServer {
 		public String getUsername() {
 			return username;
 		}
+
+		public ObjectOutputStream getOut(){
+			return out;
+		}
 		
 		/**
 		 * Contiene el bucle principal del hilo,
@@ -297,13 +299,13 @@ public class ChatServerImpl implements ChatServer {
 	                		ChatMessage eliminarMessage;
 	                		if (nameId.containsKey(cm.getMessage())) {
 	                			eliminarMessage = new ChatMessage(0, MessageType.MESSAGE, "El usuario " + cm.getMessage() + " ha sido desconectado");
-	                			System.out.println(nameId.get(cm.getMessage()));
+								sendMessage(eliminarMessage, cm.getId());
 	                			remove(nameId.get(cm.getMessage()));
 	                			nameId.remove(cm.getMessage());
 	                		}else {	                			
 	                			eliminarMessage = new ChatMessage(0, MessageType.MESSAGE, "El usuario " + cm.getMessage() + " no existe");
-	                		}
-	                		sendMessage(eliminarMessage, cm.getId());
+								sendMessage(eliminarMessage, cm.getId());
+							}
 	                        break;
 	                    case MESSAGE:
 	                        broadcast(cm);
