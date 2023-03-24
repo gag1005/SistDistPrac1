@@ -93,9 +93,11 @@ public class ChatClientImpl implements ChatClient{
                 }else if(type.equals("LOGOUT")){
                     cm = new ChatMessage(id, MessageType.LOGOUT, username);
                     sendMessage(cm);
+                    carryOn = false;
                 }else if(type.equals("DROP")){
                     cm = new ChatMessage(id, MessageType.LOGOUT, inputLine.split(" ")[1]);
                     sendMessage(cm);
+                    // disconnet();
                 }else{
                     cm = new ChatMessage(id, MessageType.MESSAGE, inputLine);
                     sendMessage(cm);
