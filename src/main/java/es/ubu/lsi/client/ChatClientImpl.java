@@ -63,8 +63,6 @@ public class ChatClientImpl implements ChatClient{
     public void disconnet() {
         carryOn = false;
     	try {
-            System.in.close();
-            stdIn.close();
     		ino.close();
     		outo.close();
     		socket.close();			
@@ -75,11 +73,15 @@ public class ChatClientImpl implements ChatClient{
     }
     
     private void createMessage(){
-        // BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
         try{
             String inputLine;
             System.out.print("> ");
             while (carryOn && (inputLine = stdIn.readLine()) != null) {
+                if (carryOn == false){
+                    disconnet();
+                    System.out.println("Te han desconectado");
+                    break;
+                }
                 
             	if(outo != null) {	
             		outo.reset();
@@ -97,7 +99,6 @@ public class ChatClientImpl implements ChatClient{
                 }else if(type.equals("DROP")){
                     cm = new ChatMessage(id, MessageType.LOGOUT, inputLine.split(" ")[1]);
                     sendMessage(cm);
-                    // disconnet();
                 }else{
                     cm = new ChatMessage(id, MessageType.MESSAGE, inputLine);
                     sendMessage(cm);
@@ -138,7 +139,8 @@ public class ChatClientImpl implements ChatClient{
 
                 while (carryOn && (mensaje = (ChatMessage) ino.readObject()) != null){
                 	if (mensaje.getType() == MessageType.LOGOUT) {
-                		disconnet();
+                		// disconnet();
+                        carryOn = false;
                 	}else {
                 		System.out.print("\b\b");
                 		System.out.println(mensaje.getMessage());
